@@ -1,0 +1,72 @@
+set l "levels" /1*4/;
+set c "columns" /1*7/;
+
+alias(l,ll);
+alias(c,cc);
+
+set previous_level(l,ll);
+previous_level(l,ll)$(l.val = ll.val - 1) = yes;
+
+display previous_level;
+
+set bordering_column(c,cc);
+bordering_column(c,cc)$(c.val = cc.val - 1) = yes;
+bordering_column(c,cc)$(cc.val = c.val - 1) = yes;
+bordering_column(c,cc)$sameas(c,cc) = yes;
+
+set previous(l,c,ll,cc) "requirement for extracting from the level and column";
+
+previous(l,c,ll,cc)$[previous_level(ll,l) and bordering_column(cc,c)] = yes;
+
+option previous:0:1:1;
+display previous;
+
+set firstlevel(l);
+firstlevel("1") = yes;
+
+Table g(l,c) 'ore concentrations (percent gold)'
+          1     2     3     4     5     6      7
+    1    -2    -2    -1    -1    -3    -2     -1
+    2    -3    0.9    4     3    -1     3      2
+    3     6    -2     7     4     8    -3      6
+    4     10    8    -4     10    8    -7     -7    ;
+
+parameter pos_g(l,c) "positive amounts of gold",
+          neg_g(l,c) "negative amounts of gold";
+
+scalar cutoff_value /1/;
+
+pos_g(l,c)$(g(l,c)>cutoff_value) = g(l,c);
+neg_g(l,c)$(g(l,c)<0) = g(l,c);
+
+scalar price /15/;
+scalar cost /5/;
+scalar demand /39/;
+scalar limit_block /1/;
+
+set lcfeas(l,c);
+lcfeas("1",c) = yes;
+lcfeas("2",c)$(c.val>1 and c.val<7) = yes;
+lcfeas("3",c)$(c.val>2 and c.val<6) = yes;
+lcfeas("4",c)$(c.val>3 and c.val<5) = yes;
+
+display lcfeas;
+
+equation previous_requirement(l,c,ll,cc), profit_eq, demand_eq, capacity_limit;
+positive variable x(l,c);
+variable profit;
+
+previous_requirement(l,c,ll,cc)$[(not firstlevel(l))$previous(l,c,ll,cc)$lcfeas(l,c)$lcfeas(ll,cc)]..
+                         x(l,c)$lcfeas(l,c) =l= X(ll,cc)$lcfeas(ll,cc);
+
+capacity_limit(l,c)$lcfeas(l,c).. limit_block =g= x(l,c);
+
+profit_eq.. profit =e= sum((l,c)$lcfeas(l,c),neg_g(l,c) * x(l,c) * cost)
+                       + sum((l,c)$lcfeas(l,c),(price-cost) * pos_g(l,c) * x(l,c));
+
+demand_eq.. sum((l,c)$lcfeas(l,c),pos_g(l,c) * x(l,c)) =e= demand;
+
+model miningforgold /all/;
+
+solve miningforgold using lp maximizing profit;
+
